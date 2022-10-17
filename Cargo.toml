@@ -9,6 +9,7 @@ homepage = "https://github.com/I-Info/ffi-destruct"
 description = "Generates destructors for structures that contain raw pointers in the FFI."
 keywords = ["ffi", "destructor", "macro", "drop", "derive"]
 categories = ["development-tools::ffi"]
+include = ["README.md", "src/**/*.rs", "LICENSE"]
 readme = "README.md"
 
 [lib]
