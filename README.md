@@ -1,9 +1,16 @@
-# Destruct Derive
+# FFI Destruct
 
-Derive macros generate destructors for structures containing raw pointers.
+Macros generate destructors for structures containing raw pointers in FFI.
+
+## About
+The `Destruct` derive macro will implement `Drop` trait and free(drop) memory for structures containing raw pointers.
+It may be a common procedure for FFI structure memory operations.
+
+Supported types of raw pointers: 
+- `*const/mut c_char`: Using `std::ffi::CString::from_raw()`
+- `*const/mut struct`: Using `std::boxed::Box::from_raw()`
 
 ## Example
-
 Provides a structure with several raw pointers that need to be dropped manually.
 ```rust
 #[derive(Destruct)]
@@ -17,7 +24,8 @@ struct Structure {
     other_nullable: *mut TestA,
 }
 ```
-With macros expanded:
+
+The macros will be expanded:
 ```rust
 struct Structure {
     c_string: *const c_char,

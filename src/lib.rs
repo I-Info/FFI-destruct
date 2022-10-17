@@ -1,3 +1,6 @@
+//! # FFI Destruct
+//! Macros generate destructors for structures containing raw pointers.
+
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput};

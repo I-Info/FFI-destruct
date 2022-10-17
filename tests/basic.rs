@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 
-use destruct_macro_derive::Destruct;
+use ffi_destruct::Destruct;
 use std::ffi::*;
 
 #[derive(Destruct)]

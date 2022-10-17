@@ -1,9 +1,21 @@
 [package]
-name = "destruct_macro_derive"
+name = "ffi-destruct"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "Apache-2.0"
+authors = ["IInfo <info@i1nfo.com>"]
+description = "Macros generate destructors for structures containing raw pointers."
+keywords = [
+    "ffi",
+    "destructor",
+    "macro",
+    "drop",
+    "struct",
+    "raw-pointer",
+    "derive",
+]
+categories = ["development-tools::ffi"]
+readme = "README.md"
 
 [lib]
 proc-macro = true
