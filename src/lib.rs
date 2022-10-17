@@ -33,12 +33,12 @@ fn field_destructors(data: &Data) -> TokenStream {
                     let name = &f.ident;
                     let attrs = &f.attrs;
 
-                    let nullable = get_attribute_nullable(&attrs);
+                    let nullable = get_attribute_nullable(attrs);
 
                     match f.ty {
                         // Raw pointer destructor
                         syn::Type::Ptr(ref ty) => {
-                            let destructor = destruct_type_ptr(name.as_ref().unwrap(), &ty);
+                            let destructor = destruct_type_ptr(name.as_ref().unwrap(), ty);
                             if nullable {
                                 quote_spanned! { f.span() =>
                                     if !self.#name.is_null() {
@@ -84,7 +84,7 @@ fn get_attribute_nullable(attrs: &Vec<syn::Attribute>) -> bool {
 /// Generate destructor for raw pointer types
 fn destruct_type_ptr(name: &Ident, ty: &syn::TypePtr) -> TokenStream {
     /// Some variant of `c_char` type paths: `std::ffi:c_char`,`libc::c_char`, `std::os::raw::c_char`,`c_char`,
-    fn is_c_char(path: &String) -> bool {
+    fn is_c_char(path: &str) -> bool {
         path.contains("c_char")
     }
 

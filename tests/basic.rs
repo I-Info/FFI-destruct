@@ -44,6 +44,17 @@ struct TestF {
     b: *mut TestE,
 }
 
+#[derive(Destruct)]
+struct Structure {
+    c_string: *const c_char,
+    #[nullable]
+    c_string_nullable: *mut c_char,
+
+    other: *mut TestA,
+    #[nullable]
+    other_nullable: *mut TestA,
+}
+
 #[test]
 fn test() {
     let a = TestA {
