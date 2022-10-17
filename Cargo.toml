@@ -7,15 +7,7 @@ authors = ["IInfo <info@i1nfo.com>"]
 repository = "https://github.com/I-Info/ffi-destruct"
 homepage = "https://github.com/I-Info/ffi-destruct"
 description = "Generates destructors for structures that contain raw pointers in the FFI."
-keywords = [
-    "ffi",
-    "destructor",
-    "macro",
-    "drop",
-    "struct",
-    "raw-pointer",
-    "derive",
-]
+keywords = ["ffi", "destructor", "macro", "drop", "derive"]
 categories = ["development-tools::ffi"]
 readme = "README.md"
 
