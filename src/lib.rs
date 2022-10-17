@@ -1,5 +1,5 @@
 //! # FFI Destruct
-//! Macros generate destructors for structures containing raw pointers.
+//! Generates destructors for structures that contain raw pointers in the FFI.
 
 use convert_case::{Case, Casing};
 use proc_macro2::{Ident, TokenStream};

@@ -1,14 +1,17 @@
 # FFI Destruct
 
-Macros generate destructors for structures containing raw pointers in FFI.
+Generates destructors for structures that contain raw pointers in the FFI.
 
 ## About
 The `Destruct` derive macro will implement `Drop` trait and free(drop) memory for structures containing raw pointers.
 It may be a common procedure for FFI structure memory operations.
 
-Supported types of raw pointers: 
-- `*const/mut c_char`: Using `std::ffi::CString::from_raw()`
-- `*const/mut struct`: Using `std::boxed::Box::from_raw()`
+## Supported types
+Both `*const` and `*mut` are acceptable. 
+But currently, only single-level pointers are supported.
+
+- `* c_char`: c-style string, using `std::ffi::CString::from_raw()` to handle `std::ffi::CString::into_raw()`
+- `* <T>`: Using `std::boxed::Box::from_raw()` to handle `std::boxed::Box::into_raw()`
 
 ## Example
 Provides a structure with several raw pointers that need to be dropped manually.
@@ -19,29 +22,42 @@ use ffi_destruct::{extern_c_destructor, Destruct};
 #[derive(Destruct)]
 pub struct Structure {
     c_string: *const c_char,
+    // Default is non-null.
     #[nullable]
     c_string_nullable: *mut c_char,
 
-    other: *mut TestA,
+    other: *mut MyStruct,
     #[nullable]
-    other_nullable: *mut TestA,
+    other_nullable: *mut MyStruct,
+
+    // Non-pointer types are still available, and will not be added to drop().
+    normal_int: u8,
+    normal_string: String,
 }
 
-// destructor macro here (optional)
+// (Optional) The macro here generates the destructor: destruct_structure()
 extern_c_destructor!(Structure);
+
+fn test_struct() {
+    let my_struct = Structure {
+        c_string: CString::new("Hello").unwrap().into_raw(),
+        c_string_nullable: std::ptr::null_mut(),
+        other: Box::into_raw(Box::new(MyStruct {
+            field: CString::new("Hello").unwrap().into_raw(),
+        })),
+        other_nullable: std::ptr::null_mut(),
+    };
+
+    let my_struct_ptr = Box::into_raw(Box::new(my_struct));
+    // FFI calling
+    unsafe {
+        destruct_structure(my_struct_ptr);
+    }
+}
 ```
 
-The macros will be expanded to:
+After expanding the macro:
 ```rust
-struct Structure {
-    c_string: *const c_char,
-    #[nullable]
-    c_string_nullable: *mut c_char,
-    other: *mut TestA,
-    #[nullable]
-    other_nullable: *mut TestA,
-}
-
 // derive(Destruct)
 impl ::std::ops::Drop for Structure {
     fn drop(&mut self) {
@@ -62,7 +78,7 @@ impl ::std::ops::Drop for Structure {
     }
 }
 
-// extern_c_destructor, with snake_case naming
+// extern_c_destructor!() generates snake_case named destructor
 #[no_mangle]
 pub unsafe extern "C" fn destruct_structure(ptr: *mut Structure) {
     if ptr.is_null() {

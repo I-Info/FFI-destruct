@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["IInfo <info@i1nfo.com>"]
-description = "Macros generate destructors for structures containing raw pointers."
+description = "Generates destructors for structures that contain raw pointers in the FFI."
 keywords = [
     "ffi",
     "destructor",

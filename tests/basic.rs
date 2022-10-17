@@ -61,12 +61,29 @@ pub struct Structure {
     #[nullable]
     c_string_nullable: *mut c_char,
 
-    other: *mut TestA,
+    other: *mut MyStruct,
     #[nullable]
-    other_nullable: *mut TestA,
+    other_nullable: *mut MyStruct,
 }
 
 extern_c_destructor!(Structure);
+
+#[test]
+fn test_struct() {
+    let my_struct = Structure {
+        c_string: CString::new("Hello").unwrap().into_raw(),
+        c_string_nullable: std::ptr::null_mut(),
+        other: Box::into_raw(Box::new(MyStruct {
+            field: CString::new("Hello").unwrap().into_raw(),
+        })),
+        other_nullable: std::ptr::null_mut(),
+    };
+
+    let my_struct_ptr = Box::into_raw(Box::new(my_struct));
+    unsafe {
+        destruct_structure(my_struct_ptr);
+    }
+}
 
 #[test]
 fn test() {
