@@ -1,14 +1,23 @@
 #![allow(dead_code, unused)]
 
-use ffi_destruct::Destruct;
+use ffi_destruct::{extern_c_destructor, Destruct};
 use std::ffi::*;
 
 #[derive(Destruct)]
-struct TestA {
+pub struct TestA {
     a: *const std::ffi::c_char,
     b: *const std::os::raw::c_char,
     c: *mut c_char,
 }
+
+extern_c_destructor!(TestA);
+
+#[derive(Destruct)]
+pub struct MyStruct {
+    field: *mut std::ffi::c_char,
+}
+
+extern_c_destructor!(MyStruct);
 
 #[derive(Destruct)]
 struct TestB {
@@ -38,14 +47,16 @@ impl Drop for TestE {
 }
 
 #[derive(Destruct)]
-struct TestF {
+pub struct TestF {
     a: *mut TestE,
     #[nullable]
     b: *mut TestE,
 }
 
+extern_c_destructor!(TestF);
+
 #[derive(Destruct)]
-struct Structure {
+pub struct Structure {
     c_string: *const c_char,
     #[nullable]
     c_string_nullable: *mut c_char,
@@ -55,6 +66,8 @@ struct Structure {
     other_nullable: *mut TestA,
 }
 
+extern_c_destructor!(Structure);
+
 #[test]
 fn test() {
     let a = TestA {
@@ -62,6 +75,10 @@ fn test() {
         b: CString::into_raw(CString::new("123123").unwrap()),
         c: CString::into_raw(CString::new("123123").unwrap()),
     };
+    let ptr_a = Box::into_raw(Box::new(a));
+    unsafe {
+        destruct_test_a(ptr_a);
+    }
     let b = TestB {
         a: String::from("test"),
         b: Box::into_raw(Box::new(String::from("test"))),
@@ -78,4 +95,8 @@ fn test() {
         a: Box::into_raw(Box::new(e)),
         b: std::ptr::null_mut(),
     };
+    let ptr_f = Box::into_raw(Box::new(f));
+    unsafe {
+        destruct_test_f(ptr_f);
+    }
 }

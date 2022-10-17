@@ -13,8 +13,11 @@ Supported types of raw pointers:
 ## Example
 Provides a structure with several raw pointers that need to be dropped manually.
 ```rust
+use ffi_destruct::{extern_c_destructor, Destruct};
+
+// Struct definition here, with deriving Destruct and nullable attributes.
 #[derive(Destruct)]
-struct Structure {
+pub struct Structure {
     c_string: *const c_char,
     #[nullable]
     c_string_nullable: *mut c_char,
@@ -23,9 +26,12 @@ struct Structure {
     #[nullable]
     other_nullable: *mut TestA,
 }
+
+// destructor macro here (optional)
+extern_c_destructor!(Structure);
 ```
 
-The macros will be expanded:
+The macros will be expanded to:
 ```rust
 struct Structure {
     c_string: *const c_char,
@@ -36,6 +42,7 @@ struct Structure {
     other_nullable: *mut TestA,
 }
 
+// derive(Destruct)
 impl ::std::ops::Drop for Structure {
     fn drop(&mut self) {
         unsafe {
@@ -53,5 +60,14 @@ impl ::std::ops::Drop for Structure {
             }
         }
     }
+}
+
+// extern_c_destructor, with snake_case naming
+#[no_mangle]
+pub unsafe extern "C" fn destruct_structure(ptr: *mut Structure) {
+    if ptr.is_null() {
+        return;
+    }
+    let _ = ::std::boxed::Box::from_raw(ptr);
 }
 ```

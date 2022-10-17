@@ -1,11 +1,17 @@
 //! # FFI Destruct
 //! Macros generate destructors for structures containing raw pointers.
 
+use convert_case::{Case, Casing};
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput};
 
-/// The `Destruct` derive macro.
+/// The [`Destruct`] derive macro.
+///
+/// Generate a destructor for the structure.
+///
+/// ## Field Attributes
+/// - `#[nullable]` - The field is nullable, the destructor will check if the pointer is null before
 #[proc_macro_derive(Destruct, attributes(nullable))]
 pub fn destruct_macro_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -74,6 +80,7 @@ fn field_destructors(data: &Data) -> TokenStream {
     }
 }
 
+/// Check if the field is nullable.
 fn get_attribute_nullable(attrs: &Vec<syn::Attribute>) -> bool {
     let mut nullable = false;
     for attr in attrs {
@@ -108,5 +115,60 @@ fn destruct_type_ptr(name: &Ident, ty: &syn::TypePtr) -> TokenStream {
             }
         }
         _ => panic!("Only single level raw pointers are supported"),
+    }
+}
+
+/// Generate extern "C" destructor for provide type
+///
+/// Provide the function name: "destruct_" + snake_case name of the type.
+///
+/// ## Usage
+///
+/// ```
+/// // Definition of struct here
+/// # use ffi_destruct::{Destruct, extern_c_destructor};
+/// #[derive(Destruct)]
+/// pub struct MyStruct {
+///     field: *mut std::ffi::c_char,
+/// }
+/// // destructor macro here
+/// extern_c_destructor!(MyStruct);
+/// ```
+/// The macro will be expanded to:
+/// ```
+/// # use ffi_destruct::Destruct;
+/// # #[derive(Destruct)]
+/// # pub struct MyStruct {
+/// #    field: *mut std::ffi::c_char,
+/// # }
+/// #[no_mangle]
+/// pub unsafe extern "C" fn destruct_my_struct(ptr: *mut MyStruct) {
+///     if ptr.is_null() {
+///         return;
+///     }
+///     let _ = ::std::boxed::Box::from_raw(ptr);
+/// }
+/// ```
+#[proc_macro]
+pub fn extern_c_destructor(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ty: syn::Type = parse_macro_input!(input);
+    match ty {
+        syn::Type::Path(v) => {
+            let ident = v.path.get_ident().expect("Only support single ident.");
+            let mut name = ident.to_string().to_case(Case::Snake);
+            name.insert_str(0, "destruct_");
+            let fn_ident = Ident::new(&name, ident.span());
+            quote! {
+                #[no_mangle]
+                pub unsafe extern "C" fn #fn_ident(ptr: *mut #ident) {
+                    if ptr.is_null() {
+                        return;
+                    }
+                    let _ = ::std::boxed::Box::from_raw(ptr);
+                }
+            }
+            .into()
+        }
+        _ => panic!("Not supported type"),
     }
 }
