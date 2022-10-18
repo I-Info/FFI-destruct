@@ -1,4 +1,12 @@
 # FFI Destruct
+[![crates badge]][crates.io] [![docs badge]][docs.rs] [![build badge]][build]
+
+[crates badge]: https://img.shields.io/crates/v/ffi-destruct.svg?logo=rust
+[crates.io]: https://crates.io/crates/ffi-destruct
+[docs badge]: https://img.shields.io/docsrs/ffi-destruct/latest?label=docs.rs&logo=docs.rs
+[docs.rs]: https://docs.rs/ffi-destruct
+[build badge]: https://github.com/I-Info/FFI-destruct/actions/workflows/build.yml/badge.svg
+[build]: https://github.com/I-Info/FFI-destruct/actions/workflows/build.yml
 
 Generates destructors for structures that contain raw pointers in the FFI.
 
