@@ -24,6 +24,7 @@ But currently, only single-level pointers are supported.
 ## Example
 Provides a structure with several raw pointers that need to be dropped manually.
 ```rust
+use std::ffi::*;
 use ffi_destruct::{extern_c_destructor, Destruct};
 
 // Struct definition here, with deriving Destruct and nullable attributes.
@@ -39,8 +40,8 @@ pub struct Structure {
     other_nullable: *mut MyStruct,
 
     // Non-pointer types are still available, and will not be added to drop().
-    normal_int: u8,
-    normal_string: String,
+    // normal_int: u8,
+    // normal_string: String,
 }
 
 // (Optional) The macro here generates the destructor: destruct_structure()
