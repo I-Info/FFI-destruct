@@ -27,6 +27,11 @@ Provides a structure with several raw pointers that need to be dropped manually.
 use std::ffi::*;
 use ffi_destruct::{extern_c_destructor, Destruct};
 
+#[derive(Destruct)]
+pub struct MyStruct {
+    field: *mut std::ffi::c_char,
+}
+
 // Struct definition here, with deriving Destruct and nullable attributes.
 #[derive(Destruct)]
 pub struct Structure {
@@ -68,20 +73,27 @@ fn test_struct() {
 After expanding the macro:
 ```rust
 // derive(Destruct)
+impl ::std::ops::Drop for MyStruct {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = ::std::ffi::CString::from_raw(self.field as *mut ::std::ffi::c_char);
+        }
+    }
+}
+
+// derive(Destruct)
 impl ::std::ops::Drop for Structure {
     fn drop(&mut self) {
         unsafe {
-            let _ = ::std::ffi::CString::from_raw(
-                self.c_string as *mut ::std::ffi::c_char,
-            );
+            let _ = ::std::ffi::CString::from_raw(self.c_string as *mut ::std::ffi::c_char);
             if !self.c_string_nullable.is_null() {
                 let _ = ::std::ffi::CString::from_raw(
                     self.c_string_nullable as *mut ::std::ffi::c_char,
                 );
             }
-            let _ = ::std::boxed::Box::from_raw(self.other as *mut TestA);
+            let _ = ::std::boxed::Box::from_raw(self.other as *mut MyStruct);
             if !self.other_nullable.is_null() {
-                let _ = ::std::boxed::Box::from_raw(self.other_nullable as *mut TestA);
+                let _ = ::std::boxed::Box::from_raw(self.other_nullable as *mut MyStruct);
             }
         }
     }
