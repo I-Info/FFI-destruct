@@ -3,7 +3,7 @@
 //!
 //! ## Example
 //! Provides a structure with several raw pointers that need to be dropped manually.
-//! ```no_run
+//! ```
 //! use ffi_destruct::{extern_c_destructor, Destruct};
 //! use std::ffi::*;
 //!
@@ -26,6 +26,10 @@
 //!     #[nullable]
 //!     other_nullable: *mut MyStruct,
 //!
+//!     // Do not drop this field.
+//!     #[no_drop]
+//!     not_dropped: *const AnyOther,
+//!
 //!     // Raw pointer for any other things
 //!     any: *mut AnyOther,
 //!
@@ -38,6 +42,10 @@
 //! extern_c_destructor!(Structure);
 //!
 //! fn test() {
+//!     // Some resources manually managed
+//!     let tmp = AnyOther(1, 1);
+//!     let tmp_ptr = Box::into_raw(Box::new(tmp));
+//!
 //!     let my_struct = Structure {
 //!         c_string: CString::new("Hello").unwrap().into_raw(),
 //!         c_string_nullable: std::ptr::null_mut(),
@@ -45,6 +53,7 @@
 //!             field: CString::new("Hello").unwrap().into_raw(),
 //!         })),
 //!         other_nullable: std::ptr::null_mut(),
+//!         not_dropped: tmp_ptr,
 //!         any: Box::into_raw(Box::new(AnyOther(1, 1))),
 //!         normal_int: 114514,
 //!         normal_string: "Hello".to_string(),
@@ -55,20 +64,28 @@
 //!     unsafe {
 //!         destruct_structure(my_struct_ptr);
 //!     }
+//!
+//!     // Drop the manually managed resources
+//!     unsafe {
+//!         let _ = Box::from_raw(tmp_ptr);
+//!     }
 //! }
 //! ```
 //!
 //! After expanding the macros:
 //! ```ignore
 //! #[macro_use]
+//! #![feature(prelude_import)]
+//! #![allow(dead_code)]
+//! #[prelude_import]
+//! use std::prelude::rust_2021::*;
+//! #[macro_use]
 //! extern crate std;
 //! use ffi_destruct::{extern_c_destructor, Destruct};
 //! use std::ffi::*;
-//!
 //! pub struct MyStruct {
 //!     field: *mut std::ffi::c_char,
 //! }
-//!
 //! impl ::std::ops::Drop for MyStruct {
 //!     fn drop(&mut self) {
 //!         unsafe {
@@ -76,9 +93,7 @@
 //!         }
 //!     }
 //! }
-//!
 //! pub struct AnyOther(u32, u32);
-//!
 //! pub struct Structure {
 //!     c_string: *const c_char,
 //!     #[nullable]
@@ -86,11 +101,12 @@
 //!     other: *mut MyStruct,
 //!     #[nullable]
 //!     other_nullable: *mut MyStruct,
+//!     #[no_drop]
+//!     not_dropped: *const AnyOther,
 //!     any: *mut AnyOther,
 //!     pub normal_int: u32,
 //!     pub normal_string: String,
 //! }
-//!
 //! impl ::std::ops::Drop for Structure {
 //!     fn drop(&mut self) {
 //!         unsafe {
@@ -112,7 +128,6 @@
 //!         }
 //!     }
 //! }
-//!
 //! #[no_mangle]
 //! pub unsafe extern "C" fn destruct_structure(ptr: *mut Structure) {
 //!     if ptr.is_null() {
@@ -120,8 +135,9 @@
 //!     }
 //!     let _ = ::std::boxed::Box::from_raw(ptr);
 //! }
-//!
-//! fn main() {
+//! fn test() {
+//!     let tmp = AnyOther(1, 1);
+//!     let tmp_ptr = Box::into_raw(Box::new(tmp));
 //!     let my_struct = Structure {
 //!         c_string: CString::new("Hello").unwrap().into_raw(),
 //!         c_string_nullable: std::ptr::null_mut(),
@@ -131,6 +147,7 @@
 //!             }),
 //!         ),
 //!         other_nullable: std::ptr::null_mut(),
+//!         not_dropped: tmp_ptr,
 //!         any: Box::into_raw(Box::new(AnyOther(1, 1))),
 //!         normal_int: 114514,
 //!         normal_string: "Hello".to_string(),
@@ -139,8 +156,14 @@
 //!     unsafe {
 //!         destruct_structure(my_struct_ptr);
 //!     }
+//!     unsafe {
+//!         let _ = Box::from_raw(tmp_ptr);
+//!     }
 //! }
 //! ```
+
+mod destruct;
+mod utils;
 
 use convert_case::{Case, Casing};
 use proc_macro2::{Ident, TokenStream};
@@ -153,110 +176,14 @@ use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput};
 ///
 /// ## Field Attributes
 /// - `#[nullable]` - The field is nullable, the destructor will check if the pointer is null before
-#[proc_macro_derive(Destruct, attributes(nullable))]
+/// - `#[no_drop]` - The field will not be added to the destructor
+#[proc_macro_derive(Destruct, attributes(nullable, no_drop))]
 pub fn destruct_macro_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let name = input.ident;
-
-    let destructors = field_destructors(&input.data);
-
-    let expand = quote! {
-        impl ::std::ops::Drop for #name {
-            fn drop(&mut self) {
-                unsafe {
-                    #destructors
-                }
-            }
-        }
-    };
+    let expand = destruct::impl_destruct_macro(&input);
 
     proc_macro::TokenStream::from(expand)
-}
-
-/// Parsing fields and generating destructors for them.
-fn field_destructors(data: &Data) -> TokenStream {
-    match *data {
-        Data::Struct(ref data) => match data.fields {
-            syn::Fields::Named(ref fields) => {
-                let recurse = fields.named.iter().map(|f| {
-                    let name = &f.ident;
-                    let attrs = &f.attrs;
-
-                    let nullable = get_attribute_nullable(attrs);
-
-                    match f.ty {
-                        // Raw pointer destructor
-                        syn::Type::Ptr(ref ty) => {
-                            let destructor = destruct_type_ptr(name.as_ref().unwrap(), ty);
-                            if nullable {
-                                quote_spanned! { f.span() =>
-                                    if !self.#name.is_null() {
-                                        #destructor
-                                    }
-                                }
-                            } else {
-                                quote_spanned! { f.span() =>
-                                    #destructor
-                                }
-                            }
-                        }
-                        // Other types don't require manual destructors
-                        _ => {
-                            if nullable {
-                                panic!("Nullable attribute is only supported for raw pointers");
-                            }
-                            TokenStream::new() // Empty
-                        }
-                    }
-                });
-                quote! {
-                    #(#recurse)*
-                }
-            }
-            syn::Fields::Unnamed(_) => unimplemented!("Unnamed fields are not supported"),
-            syn::Fields::Unit => panic!("Unit structs cannot be destructed"),
-        },
-        _ => panic!("Destruct can only be derived for structs"),
-    }
-}
-
-/// Check if the field is nullable.
-fn get_attribute_nullable(attrs: &Vec<syn::Attribute>) -> bool {
-    let mut nullable = false;
-    for attr in attrs {
-        if attr.path.is_ident("nullable") {
-            nullable = true;
-        }
-    }
-    nullable
-}
-
-/// Generate destructor for raw pointer types
-fn destruct_type_ptr(name: &Ident, ty: &syn::TypePtr) -> TokenStream {
-    /// Some variant of `c_char` type paths: `std::ffi:c_char`,`libc::c_char`, `std::os::raw::c_char`,`c_char`,
-    fn is_c_char(path: &str) -> bool {
-        path.contains("c_char")
-    }
-
-    match *ty.elem {
-        syn::Type::Path(ref path) => {
-            let ts = path.path.to_token_stream();
-            let path_string = ts.to_string();
-            if is_c_char(&path_string) {
-                // Drop c-string
-                quote_spanned! { ty.span()=>
-                    let _ = ::std::ffi::CString::from_raw(self.#name as *mut ::std::ffi::c_char);
-                }
-            } else {
-                // Drop other raw pointer
-                quote_spanned! { ty.span()=>
-                    let _ = ::std::boxed::Box::from_raw(self.#name as *mut #ts);
-                }
-            }
-        }
-        _ => panic!("Only single level raw pointers are supported"),
-    }
 }
 
 /// Generate extern "C" destructor for provide type

@@ -17,9 +17,10 @@ It may be a common procedure for FFI structure memory operations.
 ## Supported types
 Both `*const` and `*mut` are acceptable. 
 But currently, only single-level pointers are supported.
-
-- `* c_char`: c-style string, using `std::ffi::CString::from_raw()` to handle `std::ffi::CString::into_raw()`
-- `* <T>`: Using `std::boxed::Box::from_raw()` to handle `std::boxed::Box::into_raw()`
+| type       | note                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| `* c_char` | c-style string, using `std::ffi::CString::from_raw()` to handle `std::ffi::CString::into_raw()` |
+| `* <T>`    | Using `std::boxed::Box::from_raw()` to handle `std::boxed::Box::into_raw()`                     |
 
 ## Example
 Provides a structure with several raw pointers that need to be dropped manually.
@@ -46,6 +47,10 @@ pub struct Structure {
     #[nullable]
     other_nullable: *mut MyStruct,
 
+    // Do not drop this field.
+    #[no_drop]
+    not_dropped: *const AnyOther,
+
     // Raw pointer for any other things
     any: *mut AnyOther,
 
@@ -58,6 +63,10 @@ pub struct Structure {
 extern_c_destructor!(Structure);
 
 fn main() {
+    // Some resources manually managed
+    let tmp = AnyOther(1, 1);
+    let tmp_ptr = Box::into_raw(Box::new(tmp));
+
     let my_struct = Structure {
         c_string: CString::new("Hello").unwrap().into_raw(),
         c_string_nullable: std::ptr::null_mut(),
@@ -65,6 +74,7 @@ fn main() {
             field: CString::new("Hello").unwrap().into_raw(),
         })),
         other_nullable: std::ptr::null_mut(),
+        not_dropped: tmp_ptr,
         any: Box::into_raw(Box::new(AnyOther(1, 1))),
         normal_int: 114514,
         normal_string: "Hello".to_string(),
@@ -75,20 +85,28 @@ fn main() {
     unsafe {
         destruct_structure(my_struct_ptr);
     }
+
+    // Drop the manually managed resources
+    unsafe {
+        let _ = Box::from_raw(tmp_ptr);
+    }
 }
 ```
 
 After expanding the macros:
 ```rust
 #[macro_use]
+#![feature(prelude_import)]
+#![allow(dead_code)]
+#[prelude_import]
+use std::prelude::rust_2021::*;
+#[macro_use]
 extern crate std;
 use ffi_destruct::{extern_c_destructor, Destruct};
 use std::ffi::*;
-
 pub struct MyStruct {
     field: *mut std::ffi::c_char,
 }
-
 impl ::std::ops::Drop for MyStruct {
     fn drop(&mut self) {
         unsafe {
@@ -96,9 +114,7 @@ impl ::std::ops::Drop for MyStruct {
         }
     }
 }
-
 pub struct AnyOther(u32, u32);
-
 pub struct Structure {
     c_string: *const c_char,
     #[nullable]
@@ -106,11 +122,12 @@ pub struct Structure {
     other: *mut MyStruct,
     #[nullable]
     other_nullable: *mut MyStruct,
+    #[no_drop]
+    not_dropped: *const AnyOther,
     any: *mut AnyOther,
     pub normal_int: u32,
     pub normal_string: String,
 }
-
 impl ::std::ops::Drop for Structure {
     fn drop(&mut self) {
         unsafe {
@@ -132,7 +149,6 @@ impl ::std::ops::Drop for Structure {
         }
     }
 }
-
 #[no_mangle]
 pub unsafe extern "C" fn destruct_structure(ptr: *mut Structure) {
     if ptr.is_null() {
@@ -140,8 +156,9 @@ pub unsafe extern "C" fn destruct_structure(ptr: *mut Structure) {
     }
     let _ = ::std::boxed::Box::from_raw(ptr);
 }
-
 fn main() {
+    let tmp = AnyOther(1, 1);
+    let tmp_ptr = Box::into_raw(Box::new(tmp));
     let my_struct = Structure {
         c_string: CString::new("Hello").unwrap().into_raw(),
         c_string_nullable: std::ptr::null_mut(),
@@ -151,6 +168,7 @@ fn main() {
             }),
         ),
         other_nullable: std::ptr::null_mut(),
+        not_dropped: tmp_ptr,
         any: Box::into_raw(Box::new(AnyOther(1, 1))),
         normal_int: 114514,
         normal_string: "Hello".to_string(),
@@ -158,6 +176,9 @@ fn main() {
     let my_struct_ptr = Box::into_raw(Box::new(my_struct));
     unsafe {
         destruct_structure(my_struct_ptr);
+    }
+    unsafe {
+        let _ = Box::from_raw(tmp_ptr);
     }
 }
 ```

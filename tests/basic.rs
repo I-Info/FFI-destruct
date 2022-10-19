@@ -36,6 +36,8 @@ struct TestC {
 struct TestD {
     #[nullable]
     a: *mut TestC,
+    #[no_drop]
+    b: *const TestC,
 }
 
 struct TestE();
@@ -106,6 +108,7 @@ fn test() {
     };
     let d = TestD {
         a: Box::into_raw(Box::new(c)),
+        b: std::ptr::null_mut(),
     };
     let e = TestE();
     let f = TestF {
