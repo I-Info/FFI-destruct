@@ -12,15 +12,20 @@ Generates destructors for structures that contain raw pointers in the FFI.
 
 ## About
 The `Destruct` derive macro will implement `Drop` trait and free(drop) memory for structures containing raw pointers.
-It may be a common procedure for FFI structure memory operations.
+It may be a common procedure for FFI resource management.
+
+## Safety
+All the raw pointer dropping operations are unsafe and almost unchecked. 
+**Should only drop resources managed by Rust side.**
 
 ## Supported types
 Both `*const` and `*mut` are acceptable. 
 But currently, only single-level pointers are supported.
-| type       | note                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------- |
-| `* c_char` | c-style string, using `std::ffi::CString::from_raw()` to handle `std::ffi::CString::into_raw()` |
-| `* <T>`    | Using `std::boxed::Box::from_raw()` to handle `std::boxed::Box::into_raw()`                     |
+
+| type       | handler                           | note                                                                                             |
+| ---------- | --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `* c_char` | `::std::ffi::CString::from_raw()` | C-style string. Likely type path: </br> `std::ffi::c_char` `libc::c_char` `std::os::raw::c_char` |
+| `* <T>`    | `::std::boxed::Box::from_raw()`   | Anything heap-allocated by Rust. Something likely from: </br> `Box::into_raw(Box::new(<T>))`     |
 
 ## Example
 Provides a structure with several raw pointers that need to be dropped manually.
